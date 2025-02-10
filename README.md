@@ -1,4 +1,4 @@
-# Nihonium - A C++ framework for memory manipulation on the Playstation 5
+# Nihonium - A C++ framework for memory manipulation on the Playstation 5 (PS5).
 **Note: Currently heavily work in progress**
 
 # **Table of Contents**
@@ -48,7 +48,7 @@ Here are and will be a lot of small examples on how to use different parts of th
 
 ### How to retreive the kernel text base
 ```cpp
-#include "kernel_mem.hpp"
+#include "kernel_memory.hpp"
 #include <print>
 
 int main()
@@ -62,7 +62,7 @@ int main()
 ```
 ### How to retreive the kernel data base
 ```cpp
-#include "kernel_mem.hpp"
+#include "kernel_memory.hpp"
 #include <print>
 
 int main()
@@ -76,7 +76,7 @@ int main()
 ```
 ### How to read kernel memory
 ```cpp
-#include "kernel_mem.hpp"
+#include "kernel_memory.hpp"
 #include <print>
 
 int main()
@@ -95,7 +95,7 @@ int main()
 ```
 ### How to write to kernel memory
 ```cpp
-#include "kernel_mem.hpp"
+#include "kernel_memory.hpp"
 #include <print>
 
 int main()
@@ -115,7 +115,7 @@ int main()
 ```
 ### How to change the memory protection of a memory region in the kernel
 ```cpp
-#include "kernel_mem.hpp"
+#include "kernel_memory.hpp"
 #include <print>
 
 int main()
@@ -136,7 +136,7 @@ int main()
 ```
 ### How to retreive an process by its pid
 ```cpp
-#include "kernel_mem.hpp"
+#include "kernel_memory.hpp"
 #include <print>
 
 int main()
