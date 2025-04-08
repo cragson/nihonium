@@ -7,6 +7,9 @@
 
 #include "ILibkernel.hpp"
 #include "kernel_memory.hpp"
+#include "tcp-server.hpp"
+
+
 
 void demo_hwinfo()
 {
@@ -74,22 +77,93 @@ void demo_kmem()
 
     const auto kernel_txt = KernelMemory::get_kernel_text_base();
 
-    std::println("[+] Kernel Text Base: {:X}", kernel_txt);
+    std::println("[+] Kernel Text Base: 0x{:X}", kernel_txt);
+    std::println("[+] Kernel Text Base: {}", kernel_txt);
 
-    hexdump( kernel_txt, 0x80 );
+    hexdump( kernel_txt, 32 );
 
     const auto kernel_data = KernelMemory::get_kernel_data_base();
 
     std::println("[+] Kernel Data Base: {:X}", kernel_data);
 
-    hexdump( kernel_data, 0x80 );
+    hexdump( kernel_data, 32 );
 }
+
+void demo_current_process()
+{
+    const auto _current_process = KernelMemory::get_current_process();
+
+    std::println("[+] Current process: {:X}", _current_process);
+
+    std::string _process_name = KernelMemory::read_string_from_memory( _current_process + 0x59C );
+    //_process_name.resize(32);
+
+    //_process_name = KernelMemory::read_kernel< char[32] >( _current_process + 0x59C);
+    //kernel_copyout( _current_process + 0x59C, _process_name.data(), 32);
+
+
+    std::println("[-] Process name: {}", _process_name);
+
+    const auto _process_vmspace = KernelMemory::read_kernel< std::intptr_t >( _current_process + 0x200 );
+
+    std::println("[+] Process vmspace: {:X}", _process_vmspace);
+
+    const auto _process_vmspace_num_entries = KernelMemory::read_kernel< uint32_t >( _process_vmspace + 0x1A8 );
+
+    std::println("[+] vmspace num entries: {}", _process_vmspace_num_entries);
+
+
+    auto _process = KernelMemory::read_kernel< std::intptr_t >( KERNEL_ADDRESS_ALLPROC );
+
+    uint32_t counter_process = 0;
+
+    do
+    {
+        kernel_copyout( _process + 0x59C, _process_name.data(), 32);
+
+        const auto _process_pid = KernelMemory::read_kernel< int32_t >( _process + KERNEL_OFFSET_PROC_P_PID );
+
+        const auto _process_path = KernelMemory::read_string_from_memory( _process + 0x5BC );
+
+        std::println( "[{}]: pid: {} - name: {} [{}]", ++counter_process, _process_pid, _process_name, _process_path );
+
+        _process_name.clear();
+        _process_name.resize( 32 );
+
+        _process = KernelMemory::read_kernel< std::intptr_t >( _process );
+
+    } while ( _process );
+    
+}
+
+void demo_tcp()
+{
+    const auto srv = std::make_unique< tcp_server >();
+
+    std::print("[-] Trying to setup tcp server..");
+
+    constexpr auto SERVER_PORT = 60002;
+
+    if( srv->setup_server( SERVER_PORT ) )
+        std::println("done!");
+    else
+    {
+        std::println("failed!");
+
+        return;
+    }
+
+    ILibkernel::send_kernel_notitifcation( std::format("nihonium\nserver listening now on: {}", SERVER_PORT ) );
+
+    srv->run();
+}
+
 
 int main() 
 {
-    demo_hwinfo();
+   demo_kmem();
 
-    demo_kmem();
-  
-    return 0;
+   demo_tcp();
+
+   return 0;
 }

@@ -1,4 +1,7 @@
 # Nihonium - A C++ framework for memory manipulation on the Playstation 5 (PS5).
+
+![nihonium-preview](res/preview-010-1.png)
+
 **Note: Currently heavily work in progress**
 
 # **Table of Contents**
@@ -27,6 +30,11 @@
 3. **(Optional)** Jailbreak your PS5 to send the payload directly after building
 4. Set the correct IP address of your PS5 inside of ``nihonium/debug.sh``
 5. Run ``nihonium/debug.sh`` to build the payload and sent it to your PS5
+
+If you want to use the web-based hex viewer, make sure to install the necessary python dependencies first
+1. Start the ``nihonium-app.py`` after the nihonium payload was sent to your PS5
+2. Then go with your browser to ``http://localhost:5000``
+### A lot of things are changing right now, so please have a look at the source code to see the state of all features and how they are implemented!
 
 ## **Framework features**
 Here are all the available features of this framework listed, explained and shown with an example.

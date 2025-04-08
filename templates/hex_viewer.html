@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Nihonium 0.1.0</title>
+  <style>
+    body { 
+      font-family: monospace; 
+      margin: 20px;
+      background-color: black;
+      color: darkgrey; 
+    }
+    h1 { font-size: 24px; }
+    #statusBar { margin-bottom: 10px; font-weight: bold; }
+    #tabs { margin-bottom: 10px; }
+    .tab {
+      display: inline-block;
+      padding: 6px 10px;
+      background: #424242;
+      cursor: pointer;
+      margin-right: 5px;
+      border-radius: 4px 4px 0 0;
+    }
+    .tab.active {
+      background: #5e5e5e;
+      font-weight: bold;
+    }
+    .tab-content {
+      border: 1px solid #3a3939;
+      border-top: none;
+      padding: 10px;
+      margin-top: -5px;
+    }
+    .hex-table { width: 100%; border-collapse: collapse; }
+    .hex-table th, .hex-table td {
+      border: 1px solid #424242;
+      padding: 4px;
+      text-align: left;
+      vertical-align: top;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .hex-table th { background-color: #3a3939; }
+    .memory-view { margin-top: 10px; }
+    .editable {
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: bold;
+      width: 100px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Nihonium by cragson</h1>
+  <button id="addTabBtn">Add Tab</button>
+  <div id="tabs"></div>
+  <div id="tabContents"></div>
+
+  <script>
+    let tabCount = 0;
+    let activeTabId = null;
+    const BLOCK_LENGTH = 1024; // bytes to read
+
+    // Add a new tab.
+    function addTab() {
+      tabCount++;
+      const tabId = 'tab' + tabCount;
+      
+      // Create tab header with an editable name.
+      const tabHeader = document.createElement('div');
+      tabHeader.className = 'tab';
+      tabHeader.id = tabId;
+      const nameSpan = document.createElement('span');
+      nameSpan.contentEditable = true;
+      nameSpan.innerText = 'Tab ' + tabCount;
+      nameSpan.onblur = () => {
+        tabHeader.dataset.name = nameSpan.innerText;
+      };
+      tabHeader.appendChild(nameSpan);
+      tabHeader.onclick = () => activateTab(tabId);
+      document.getElementById('tabs').appendChild(tabHeader);
+
+      // Create tab content.
+      const tabContent = document.createElement('div');
+      tabContent.className = 'tab-content';
+      tabContent.id = tabId + '-content';
+      tabContent.innerHTML = `
+        <div>
+          <label>Memory Address: <input type="text" id="${tabId}-address" placeholder="e.g. 0x1000"></label>
+          &nbsp;
+          <label>Interpretation:
+            <select id="${tabId}-type">
+              <option value="uint8_t">uint8_t (1 byte)</option>
+              <option value="uint16_t">uint16_t (2 bytes)</option>
+              <option value="uint32_t">uint32_t (4 bytes)</option>
+              <option value="uint64_t">uint64_t (8 bytes)</option>
+              <option value="ascii">ascii</option>
+              <option value="float">float (4 bytes)</option>
+              <option value="intptr_t">intptr_t (8 bytes)</option>
+            </select>
+          </label>
+          <button onclick="readBlock('${tabId}')">Read Memory</button>
+        </div>
+        <div class="memory-view" id="${tabId}-output">
+          Memory output will appear here...
+        </div>
+      `;
+      document.getElementById('tabContents').appendChild(tabContent);
+      activateTab(tabId);
+    }
+
+    // Activate a tab.
+    function activateTab(tabId) {
+      Array.from(document.getElementsByClassName('tab')).forEach(tab => tab.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      Array.from(document.getElementsByClassName('tab-content')).forEach(content => content.style.display = 'none');
+      document.getElementById(tabId + '-content').style.display = 'block';
+      activeTabId = tabId;
+    }
+
+    // Convert a hex string (without spaces) into an ArrayBuffer.
+    function hexToArrayBuffer(hex) {
+      let bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+      return bytes.buffer;
+    }
+
+    // Get the group size for the selected type.
+    function getGroupSize(type) {
+      if (type === 'uint8_t' || type == 'ascii') return 1;
+      else if (type === 'uint16_t') return 2;
+      else if (type === 'uint32_t' || type === 'float') return 4;
+      else if (type === 'uint64_t' || type === 'intptr_t') return 8;
+      else return 1;
+    }
+
+    // Interpret a value from DataView at the given offset for a type.
+    function interpretValue(dataView, offset, type) {
+      try {
+        if (type === 'uint8_t') return dataView.getUint8(offset);
+        else if (type == 'ascii') {
+          let u8 = dataView.getUint8(offset);
+          if( u8 >= 32 && u8 <= 126 )
+            return String.fromCharCode( u8 );
+          else
+            return '.';
+        }
+        else if (type === 'uint16_t') return dataView.getUint16(offset, false);
+        else if (type === 'uint32_t') return dataView.getUint32(offset, false);
+        else if (type === 'float') return dataView.getFloat32(offset, false).toFixed(4);
+        else if (type === 'uint64_t' || type === 'intptr_t') {
+          let high = dataView.getUint32(offset, false);
+          let low = dataView.getUint32(offset + 4, false);
+          return "0x" + ("00000000" + high.toString(16)).slice(-8) + ("00000000" + low.toString(16)).slice(-8);
+        } else return "";
+      } catch (e) {
+        return "N/A";
+      }
+    }
+
+    // Render the byte block as a hex editor view.
+    function renderHexBlock(hexData, type, baseAddress) {
+      let hexStr = hexData.replace(/\s/g, '');
+      if (hexStr.length < BLOCK_LENGTH * 2) {
+        hexStr = hexStr.padEnd(BLOCK_LENGTH * 2, '0');
+      }
+      let buffer = hexToArrayBuffer(hexStr);
+      let dataView = new DataView(buffer);
+      const groupSize = getGroupSize(type);
+      const bytesPerRow = 16;
+      let html = '<table class="hex-table"><thead><tr><th>Offset</th><th>Hex Bytes</th><th>Interpreted Values</th></tr></thead><tbody>';
+      const numRows = BLOCK_LENGTH / bytesPerRow;
+      for (let row = 0; row < numRows; row++) {
+        let offset = row * bytesPerRow;
+        let offsetStr = '0x' + (offset).toString(16).padStart(4, '0');
+        let hexBytes = '';
+        for (let i = 0; i < bytesPerRow; i++) {
+          let byteHex = hexStr.substr((offset + i) * 2, 2);
+          hexBytes += byteHex + ' ';
+        }
+        let interp = '';
+        let groupsPerRow = Math.floor(bytesPerRow / groupSize);
+        for (let g = 0; g < groupsPerRow; g++) {
+          let groupOffset = offset + g * groupSize;
+          let val = interpretValue(dataView, groupOffset, type);
+          interp += val + ' ';
+        }
+        html += `<tr><td>${offsetStr}</td><td>${hexBytes.trim()}</td><td>${interp.trim()}</td></tr>`;
+      }
+      html += '</tbody></table>';
+      return html;
+    }
+
+    // Request a byte block from the backend and update the tab view.
+    function readBlock(tabId) {
+      const address = document.getElementById(tabId + '-address').value;
+      const type = document.getElementById(tabId + '-type').value;
+      if (!address) {
+        document.getElementById(tabId + '-output').innerText = "Please enter a memory address.";
+        return;
+      }
+      fetch(`/read_block?address=${encodeURIComponent(address)}&length=${BLOCK_LENGTH}`)
+        .then(response => response.json())
+        .then(data => {
+          let outputDiv = document.getElementById(tabId + '-output');
+          if (data.error) {
+            outputDiv.innerText = data.error;
+          } else {
+            outputDiv.innerHTML = `<div>Base Address: ${data.address}</div>` +
+              renderHexBlock(data.data, type, data.address);
+          }
+        })
+        .catch(err => {
+          document.getElementById(tabId + '-output').innerText = "Error: " + err;
+        });
+    }
+
+    // Periodically update only the active tab.
+    setInterval(() => {
+      if (activeTabId) {
+        readBlock(activeTabId);
+      }
+    }, 2000);
+
+    document.getElementById('addTabBtn').addEventListener('click', addTab);
+    window.onload = addTab;
+  </script>
+</body>
+</html>
+
