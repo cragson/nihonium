@@ -1,8 +1,4 @@
-# Nihonium - A C++ framework for memory manipulation on the Playstation 5 (PS5).
-
-![nihonium-preview](res/preview-010-1.png)
-
-**Note: Currently heavily work in progress**
+# Nihonium - A C++ hacking framework for the Playstation 5 (PS5).
 
 # **Table of Contents**
 1. **[Requirements](#requirements)**
@@ -15,6 +11,8 @@
     - **[How to write to kernel memory](#how-to-write-to-kernel-memory)**
     - **[How to change the protection of a memory region in the kernel](#how-to-change-the-memory-protection-of-a-memory-region-in-the-kernel)**
     - **[How to retreive an process by its pid](#how-to-retreive-an-process-by-its-pid)**
+    - **[How to read a string from memory](#how-to-read-a-string-from-memory)**
+    - **[How to retreive a list of all processes](#how-to-retreive-a-list-of-all-processes)**
 
 ## **Requirements**
 1. Currently only tested on Firmware 2.00 but should work on all supported firmwares by the SDK.
@@ -30,11 +28,6 @@
 3. **(Optional)** Jailbreak your PS5 to send the payload directly after building
 4. Set the correct IP address of your PS5 inside of ``nihonium/debug.sh``
 5. Run ``nihonium/debug.sh`` to build the payload and sent it to your PS5
-
-If you want to use the web-based hex viewer, make sure to install the necessary python dependencies first
-1. Start the ``nihonium-app.py`` after the nihonium payload was sent to your PS5
-2. Then go with your browser to ``http://localhost:5000``
-### A lot of things are changing right now, so please have a look at the source code to see the state of all features and how they are implemented!
 
 ## **Framework features**
 Here are all the available features of this framework listed, explained and shown with an example.
@@ -57,11 +50,13 @@ Here are and will be a lot of small examples on how to use different parts of th
 ### How to retreive the kernel text base
 ```cpp
 #include "kernel_memory.hpp"
+#include <memory>
 #include <print>
 
 int main()
 {
-    const auto kernel_txt = KernelMemory::get_kernel_text_base();
+    const auto kmem = std::make_unique< kernel_memory >();
+    const auto kernel_txt = kmem->get_kernel_text_base();
 
     std::println( "[+] kernel text: {:X}", kernel_txt );
 
@@ -71,11 +66,13 @@ int main()
 ### How to retreive the kernel data base
 ```cpp
 #include "kernel_memory.hpp"
+#include <memory>
 #include <print>
 
 int main()
 {
-    const auto kernel_data = KernelMemory::get_kernel_data_base();
+    const auto kmem = std::make_unique< kernel_memory >();
+    const auto kernel_data = kmem->get_kernel_data_base();
 
     std::println( "[+] kernel data: {:X}", kernel_data );
 
@@ -85,16 +82,18 @@ int main()
 ### How to read kernel memory
 ```cpp
 #include "kernel_memory.hpp"
+#include <memory>
 #include <print>
 
 int main()
 {
-    const auto kernel_txt = KernelMemory::get_kernel_text_base();
+    const auto kmem = std::make_unique< kernel_memory >();
+    const auto kernel_txt = kmem->get_kernel_text_base();
 
     if(!kernel_txt)
         return 0;
 
-    const auto buffer = KernelMemory::read_kernel< uint64_t >( kernel_txt );
+    const auto buffer = kmem->read_kernel< uint64_t >( kernel_txt );
 
     std::println( "[+] First 8 bytes from kernel text: {:X}", buffer );
 
@@ -104,16 +103,18 @@ int main()
 ### How to write to kernel memory
 ```cpp
 #include "kernel_memory.hpp"
+#include <memory>
 #include <print>
 
 int main()
 {
-    const auto kernel_data = KernelMemory::get_kernel_data_base();
+    const auto kmem = std::make_unique< kernel_memory >();
+    const auto kernel_data = kmem->get_kernel_data_base();
 
     if(!kernel_data)
         return 0;
 
-    if( KernelMemory::write_kernel< uint64_t >( kernel_data + 0x1337, 0xDEADAFFE ) )
+    if( kmem->write_kernel< uint64_t >( kernel_data + 0x1337, 0xDEADAFFE ) )
         std::println( "[+] Successfully wrote to memory!" );
     else
         std::println( "[!] Failed to write to memory!" );
@@ -124,6 +125,7 @@ int main()
 ### How to change the memory protection of a memory region in the kernel
 ```cpp
 #include "kernel_memory.hpp"
+#include <memory>
 #include <print>
 
 int main()
@@ -134,7 +136,9 @@ int main()
     constexpr auto PROT_WRITE = 0x02;
     constexpr auto PROT_EXEC = 0x04;
 
-    if( KernelMemory::change_memory_protection( pid, address, 0x420, PROT_READ | PROT_WRITE | PROT_EXEC ) )
+    const auto kmem = std::make_unique< kernel_memory >();
+
+    if( kmem->change_memory_protection( pid, address, 0x420, PROT_READ | PROT_WRITE | PROT_EXEC ) )
         std::println( "[+] Successfully changed memory protection!" );
     else
         std::println( "[!] Failed change memory protection!" );
@@ -145,13 +149,55 @@ int main()
 ### How to retreive an process by its pid
 ```cpp
 #include "kernel_memory.hpp"
+#include <memory>
 #include <print>
 
 int main()
 {
-    const auto process = KernelMemory::get_process( 0x1337 );
+
+    const auto kmem = std::make_unique< kernel_memory >();
+    const auto process = kmem->get_process( 0x1337 );
 
     std::println( "[+] process: {:X}", process );
+
+    return 0;
+}
+```
+
+### How to read a string from memory
+```cpp
+#include "kernel_memory.hpp"
+#include <memory>
+#include <print>
+
+int main()
+{
+    const auto kmem = std::make_unique< kernel_memory >();
+    const auto str = kmem->read_string_from_memory( 0x1337 );
+
+    std::println( "[+] String from memory: {}", str );
+
+    return 0;
+}
+```
+
+### How to retreive a list of all processes
+```cpp
+#include "kernel_memory.hpp"
+#include <memory>
+#include <print>
+
+int main()
+{
+    const auto kmem = std::make_unique< kernel_memory >();
+
+    const auto processes = kmem->get_process_list();
+
+    if( processes.empty() )
+        return 0;
+
+    for( const auto& _proc : processes )
+        std::println( "[+] Name: {} PID: {} State: {}", elem->m_name, elem->m_pid, elem->m_state );
 
     return 0;
 }

@@ -5,11 +5,9 @@
 #include <print>
 #include <format>
 
+#include "orbis_view.hpp"
 #include "ILibkernel.hpp"
 #include "kernel_memory.hpp"
-#include "tcp-server.hpp"
-
-
 
 void demo_hwinfo()
 {
@@ -30,13 +28,15 @@ void demo_hwinfo()
 
 void demo_kmem()
 {
-    const auto hexdump = [](const std::uintptr_t addr, const size_t size )
+    const auto kmem = std::make_unique< kernel_memory >();
+
+    const auto hexdump = [&](const std::uintptr_t addr, const size_t size )
     {
         auto buffer = uint64_t();
 
         for( auto idx = 0; idx < size; idx += sizeof( uint64_t ) )
         {
-            buffer = KernelMemory::read_kernel< uint64_t >( addr + idx * sizeof( uint64_t ) );
+            buffer = kmem->read_kernel< uint64_t >( addr + idx * sizeof( uint64_t ) );
 
             const auto b0 = static_cast< uint8_t >( buffer >> 0 & 0xFF );
             const auto b1 = static_cast< uint8_t >( buffer >> 8 & 0xFF );
@@ -75,14 +75,14 @@ void demo_kmem()
         std::println("");
     };
 
-    const auto kernel_txt = KernelMemory::get_kernel_text_base();
+    const auto kernel_txt = kmem->get_kernel_text_base();
 
     std::println("[+] Kernel Text Base: 0x{:X}", kernel_txt);
     std::println("[+] Kernel Text Base: {}", kernel_txt);
 
     hexdump( kernel_txt, 32 );
 
-    const auto kernel_data = KernelMemory::get_kernel_data_base();
+    const auto kernel_data = kmem->get_kernel_data_base();
 
     std::println("[+] Kernel Data Base: {:X}", kernel_data);
 
@@ -91,29 +91,31 @@ void demo_kmem()
 
 void demo_current_process()
 {
-    const auto _current_process = KernelMemory::get_current_process();
+    const auto kmem = std::make_unique< kernel_memory >();
+
+    const auto _current_process = kmem->get_current_process();
 
     std::println("[+] Current process: {:X}", _current_process);
 
-    std::string _process_name = KernelMemory::read_string_from_memory( _current_process + 0x59C );
+    std::string _process_name = kmem->read_string_from_memory( _current_process + 0x59C );
     //_process_name.resize(32);
 
-    //_process_name = KernelMemory::read_kernel< char[32] >( _current_process + 0x59C);
+    //_process_name = kmem->read_kernel< char[32] >( _current_process + 0x59C);
     //kernel_copyout( _current_process + 0x59C, _process_name.data(), 32);
 
 
     std::println("[-] Process name: {}", _process_name);
 
-    const auto _process_vmspace = KernelMemory::read_kernel< std::intptr_t >( _current_process + 0x200 );
+    const auto _process_vmspace = kmem->read_kernel< std::intptr_t >( _current_process + 0x200 );
 
     std::println("[+] Process vmspace: {:X}", _process_vmspace);
 
-    const auto _process_vmspace_num_entries = KernelMemory::read_kernel< uint32_t >( _process_vmspace + 0x1A8 );
+    const auto _process_vmspace_num_entries = kmem->read_kernel< uint32_t >( _process_vmspace + 0x1A8 );
 
     std::println("[+] vmspace num entries: {}", _process_vmspace_num_entries);
 
 
-    auto _process = KernelMemory::read_kernel< std::intptr_t >( KERNEL_ADDRESS_ALLPROC );
+    auto _process = kmem->read_kernel< std::intptr_t >( KERNEL_ADDRESS_ALLPROC );
 
     uint32_t counter_process = 0;
 
@@ -121,49 +123,24 @@ void demo_current_process()
     {
         kernel_copyout( _process + 0x59C, _process_name.data(), 32);
 
-        const auto _process_pid = KernelMemory::read_kernel< int32_t >( _process + KERNEL_OFFSET_PROC_P_PID );
+        const auto _process_pid = kmem->read_kernel< int32_t >( _process + KERNEL_OFFSET_PROC_P_PID );
 
-        const auto _process_path = KernelMemory::read_string_from_memory( _process + 0x5BC );
+        const auto _process_path = kmem->read_string_from_memory( _process + 0x5BC );
 
         std::println( "[{}]: pid: {} - name: {} [{}]", ++counter_process, _process_pid, _process_name, _process_path );
 
         _process_name.clear();
         _process_name.resize( 32 );
 
-        _process = KernelMemory::read_kernel< std::intptr_t >( _process );
+        _process = kmem->read_kernel< std::intptr_t >( _process );
 
     } while ( _process );
     
 }
 
-void demo_tcp()
-{
-    const auto srv = std::make_unique< tcp_server >();
-
-    std::print("[-] Trying to setup tcp server..");
-
-    constexpr auto SERVER_PORT = 60002;
-
-    if( srv->setup_server( SERVER_PORT ) )
-        std::println("done!");
-    else
-    {
-        std::println("failed!");
-
-        return;
-    }
-
-    ILibkernel::send_kernel_notitifcation( std::format("nihonium\nserver listening now on: {}", SERVER_PORT ) );
-
-    srv->run();
-}
-
-
 int main() 
 {
    demo_kmem();
-
-   demo_tcp();
 
    return 0;
 }

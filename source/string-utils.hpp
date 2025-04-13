@@ -9,6 +9,18 @@
 
 namespace StringUtils
 {
+    inline void remove_non_printable_chars_from_string( std::string& str )
+    {
+        str.erase(
+            std::remove_if(
+                str.begin(), 
+                str.end(),
+                [](unsigned char c){ return !std::isprint( c ); }
+            ),
+            str.end()
+        );
+    }
+
     constexpr auto string_to_lower = []( std::string& str )
 	{
 		std::ranges::transform( str, str.begin(), []( auto c )
